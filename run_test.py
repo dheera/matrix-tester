@@ -11,9 +11,6 @@ from strategy_tester import StrategyTester
 from aggregation import aggregate
 from file_search import get_files_in_range, get_most_recent_file
 
-DATA_DIR = "/ml/fin/us_stocks_sip/minute_aggs_matrix"
-NUM_WORKERS = min(8, os.cpu_count())  # Up to 8 parallel workers
-
 # Fix: Ensure multiprocessing works properly
 multiprocessing.set_start_method("spawn", force=True)
 
@@ -89,25 +86,27 @@ if __name__ == "__main__":
     parser.add_argument("--end", type=str, help="End date for range (YYYY-MM-DD).")
     parser.add_argument("--slippage", type=float, default=0.0, help="Slippage per trade ($)")
     parser.add_argument("--commission", type=float, default=0.0, help="Commission per trade (%)")
-    parser.add_argument("--output", type=str, default="output", help="Output directory to put aggregated parquet output")
+    parser.add_argument("--output-dir", type=str, default="output", help="Output directory to put aggregated parquet output")
     parser.add_argument("--mode", type=str, default="parallel", help="parallel|sequential")
+    parser.add_argument("--data-dir", type=str, default="/ml/fin/us_stocks_sip/minute_aggs_matrix", help="Where is the data")
+    parser.add_argument("--num-workers", type=int, default=min(8, os.cpu_count()) , help="How many workers")
 
     args = parser.parse_args()
 
     # Determine which files to process
     if args.date:
-        data_files = [os.path.join(DATA_DIR, f"{args.date}.parquet")]
+        data_files = [os.path.join(args.data_dir, f"{args.date}.parquet")]
     elif args.start and args.end:
-        data_files = get_files_in_range(DATA_DIR, args.start, args.end)
+        data_files = get_files_in_range(args.data_dir, args.start, args.end)
     else:
         print("No date range specified, using the most recent available data.")
-        data_files = [get_most_recent_file(DATA_DIR)]
+        data_files = [get_most_recent_file(args.data_dir)]
 
     # Run strategies in parallel (Fix: Load strategy inside workers)
     all_results = []
 
     if args.mode == "parallel":
-        with ProcessPoolExecutor(max_workers=NUM_WORKERS) as executor:
+        with ProcessPoolExecutor(max_workers=args.num_workers) as executor:
             futures = {executor.submit(run_strategy_on_file, file, args.strategy_file): file for file in data_files}
             for future in concurrent.futures.as_completed(futures):
                 try:
@@ -148,8 +147,8 @@ if __name__ == "__main__":
         print(aggregated["by_hour"])
 
     # Save results
-    os.makedirs(args.output, exist_ok=True)
-    aggregated["overall"].to_parquet(os.path.join(args.output, "overall.parquet"))
-    aggregated["by_date"].to_parquet(os.path.join(args.output, "by_date.parquet"))
-    aggregated["by_ticker"].to_parquet(os.path.join(args.output, "by_ticker.parquet"))
-    aggregated["by_hour"].to_parquet(os.path.join(args.output, "by_hour.parquet"))
+    os.makedirs(args.output_dir, exist_ok=True)
+    aggregated["overall"].to_parquet(os.path.join(args.output_dir, "overall.parquet"))
+    aggregated["by_date"].to_parquet(os.path.join(args.output_dir, "by_date.parquet"))
+    aggregated["by_ticker"].to_parquet(os.path.join(args.output_dir, "by_ticker.parquet"))
+    aggregated["by_hour"].to_parquet(os.path.join(args.output_dir, "by_hour.parquet"))
