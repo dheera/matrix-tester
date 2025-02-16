@@ -26,7 +26,7 @@ def to_multiindex(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 class StrategyTester:
-    def __init__(self, strategy_class, reset_every_day = False, initial_cash=10000, slippage=0.0, commission=0.0, strategy_args = [], strategy_kwargs = {}):
+    def __init__(self, strategy_class, reset_every_day = True, initial_cash=10000, slippage=0.0, commission=0.0, strategy_args = [], strategy_kwargs = {}):
         """
         :param strategy_class: The strategy class to instantiate.
         :param initial_cash: Starting account balance.
