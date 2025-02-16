@@ -163,6 +163,7 @@ if __name__ == "__main__":
     parser.add_argument("--slippage", type=float, default=0.0, help="Slippage per trade ($)")
     parser.add_argument("--commission", type=float, default=0.0, help="Commission per trade (%)")
     parser.add_argument("--output", type=str, default="aggregated_results.parquet", help="Output Parquet file name.")
+    parser.add_argument("--mode", type=str, default="parallel", help="parallel|sequential")
 
     args = parser.parse_args()
 
@@ -177,13 +178,20 @@ if __name__ == "__main__":
 
     # Run strategies in parallel (Fix: Load strategy inside workers)
     all_results = []
-    with ProcessPoolExecutor(max_workers=NUM_WORKERS) as executor:
-        futures = {executor.submit(run_strategy_on_file, file, args.strategy_file): file for file in data_files}
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                all_results.append(future.result())
-            except Exception as e:
-                print(f"Error processing {futures[future]}: {e}")
+
+    if args.mode == "parallel":
+        with ProcessPoolExecutor(max_workers=NUM_WORKERS) as executor:
+            futures = {executor.submit(run_strategy_on_file, file, args.strategy_file): file for file in data_files}
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    all_results.append(future.result())
+                except Exception as e:
+                    print(f"Error processing {futures[future]}: {e}")
+    elif args.mode == "sequential":
+        for file in data_files:
+            print(f"Running on {file}")
+            result = run_strategy_on_file(file, args.strategy_file)
+            all_results.append(result)
 
     # Collect results
     all_by_date = [res["overall_performance"] for res in all_results if res["overall_performance"] is not None]
