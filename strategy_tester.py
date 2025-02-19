@@ -382,6 +382,7 @@ class StrategyTester:
         self.data = to_multiindex(data)
         
         self.strategy.set_tickers(sorted(self.data.columns.get_level_values(0).unique()))
+        self.strategy.set_data(self.data)
 
         # This list holds pending orders: { "execute_at": pd.Timestamp, "action": {...} }
         self.scheduled_orders = []
@@ -434,6 +435,8 @@ class StrategyTester:
 
             if end_trading:
                 break
+        
+        self.strategy.end_day()
 
         # Analyze performance
         df_overall, df_by_ticker, df_by_hour = PerformanceAnalyzer(self.trades).get_performance()

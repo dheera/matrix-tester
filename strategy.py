@@ -29,3 +29,6 @@ class Strategy:
         This method should be overridden by subclasses to implement trading logic.
         """
         return []  # No trading actions by default
+
+    def end_day(self):
+        pass
