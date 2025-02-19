@@ -80,6 +80,7 @@ def run_strategy_on_file(data_file, strategy_file, output_dir):
     results["performance_by_ticker"].to_parquet(os.path.join(output_dir, "daily", stem, "by_ticker.parquet"))
     results["performance_by_hour"].to_parquet(os.path.join(output_dir, "daily", stem, "by_hour.parquet"))
     results["trades"].to_parquet(os.path.join(output_dir, "daily", stem, "trades.parquet"))
+    results["actions"].to_parquet(os.path.join(output_dir, "daily", stem, "actions.parquet"))
     
     return results
 

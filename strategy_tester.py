@@ -367,6 +367,8 @@ class StrategyTester:
 
         self.strategy.on_start_day()
 
+        action_log = []
+
         for i, (timestamp, d) in enumerate(tqdm(self.data.iterrows(), total=len(data))):
             # 1) Execute any scheduled orders whose 'execute_at' <= current timestamp
             due_orders = []
@@ -399,6 +401,9 @@ class StrategyTester:
             end_trading = False
 
             for action in actions:
+                action["timestamp"] = timestamp
+                action_log.append(action)
+
                 if action["action"] == Strategy.END_TRADING:
                     end_trading = True
                     break
@@ -425,6 +430,7 @@ class StrategyTester:
             "performance_by_ticker": df_by_ticker,
             "performance_by_hour": df_by_hour,
             "trades": pd.DataFrame(self.trades),
+            "actions": pd.DataFrame(action_log),
             "cash": self.cash,
         }
 
