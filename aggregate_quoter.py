@@ -1,5 +1,7 @@
 from quoter import Quoter
 
+# Fake quoter that uses minute aggregates +/- slippage to generate bid and ask prices
+
 class AggregateQuoter(Quoter):
     def __init__(self, data, slippage = 0.0):
         self.data = data

@@ -4,6 +4,8 @@ from datetime import datetime
 import pandas as pd
 from quoter import Quoter
 
+# Real quoter that looks up historical bid and ask price for a ticker as of a timestamp.
+
 class RealQuoter(Quoter):
     def __init__(self, data_path = "/fin/us_stocks_sip/quotes"):
         self.data_path = data_path
