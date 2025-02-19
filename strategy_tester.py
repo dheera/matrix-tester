@@ -186,7 +186,7 @@ class StrategyTester:
         elif value is not None and value > 0:
             shares_to_buy = int(value // price)
         else:
-            raise ValueError(f"Must specify either positive 'value' or positive 'shares', but not both (ticker: {ticker}, shares: {shares})")
+            raise ValueError(f"Must specify either positive 'value' or positive 'shares', but not both (ticker: {ticker}, shares: {shares}, value: {value})")
 
         if shares_to_buy == 0:
             return
@@ -359,6 +359,7 @@ class StrategyTester:
         if self.reset_every_day:
             self._reset()
         
+        self.trades = []
         self.data = data
         self.strategy._set_tickers(sorted(self.data.columns.get_level_values(0).unique()))
 
@@ -368,6 +369,8 @@ class StrategyTester:
         self.strategy.on_start_day()
 
         action_log = []
+
+        print(f"Starting cash:", self.get_cash())
 
         for i, (timestamp, d) in enumerate(tqdm(self.data.iterrows(), total=len(data))):
             # 1) Execute any scheduled orders whose 'execute_at' <= current timestamp
@@ -403,6 +406,12 @@ class StrategyTester:
             for action in actions:
                 action["timestamp"] = timestamp
                 action_log.append(action)
+
+                if "value" in action and action["value"] < 0:
+                    raise ValueError(f"value cannot be negative: {action}")
+                
+                if "shares" in action and action["shares"] < 0:
+                    raise ValueError(f"shares cannot be negative: {action}")
 
                 if action["action"] == Strategy.END_TRADING:
                     end_trading = True
