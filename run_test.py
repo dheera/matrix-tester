@@ -32,7 +32,7 @@ def load_strategy(strategy_file):
     strategy_class = getattr(module, strategy_classes[0])
     return strategy_class
 
-def run_strategy_on_file(data_file, strategy_file):
+def run_strategy_on_file(data_file, strategy_file, output_dir):
     """Runs a strategy on a single date file and returns results."""
     print(f"Processing: {data_file}")
 
@@ -74,6 +74,13 @@ def run_strategy_on_file(data_file, strategy_file):
     if not results["trades"].empty:
         results["trades"]["date"] = date
 
+    stem = os.path.basename(data_file).replace(".parquet", "")
+    os.makedirs(os.path.join(output_dir, "daily", stem), exist_ok = True)
+    results["overall_performance"].to_parquet(os.path.join(output_dir, "daily", stem, "overall.parquet"))
+    results["performance_by_ticker"].to_parquet(os.path.join(output_dir, "daily", stem, "by_ticker.parquet"))
+    results["performance_by_hour"].to_parquet(os.path.join(output_dir, "daily", stem, "by_hour.parquet"))
+    results["trades"].to_parquet(os.path.join(output_dir, "daily", stem, "trades.parquet"))
+    
     return results
 
 if __name__ == "__main__":
@@ -100,12 +107,15 @@ if __name__ == "__main__":
         print("No date range specified, using the most recent available data.")
         data_files = [get_most_recent_file(args.data_dir)]
 
+    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(os.path.join(args.output_dir, "daily"), exist_ok=True)
+
     # Run strategies in parallel (Fix: Load strategy inside workers)
     all_results = []
 
     if args.mode == "parallel":
         with ProcessPoolExecutor(max_workers=args.num_workers) as executor:
-            futures = {executor.submit(run_strategy_on_file, file, args.strategy_file): file for file in data_files}
+            futures = {executor.submit(run_strategy_on_file, file, args.strategy_file, args.output_dir): file for file in data_files}
             for future in concurrent.futures.as_completed(futures):
                 try:
                     all_results.append(future.result())
@@ -116,7 +126,7 @@ if __name__ == "__main__":
     elif args.mode == "sequential":
         for file in data_files:
             print(f"Running on {file}")
-            result = run_strategy_on_file(file, args.strategy_file)
+            result = run_strategy_on_file(file, args.strategy_file, args.output_dir)
             all_results.append(result)
         print(f"✅ Sequential processing complete")
 
@@ -145,7 +155,6 @@ if __name__ == "__main__":
         print(aggregated["by_hour"])
 
     # Save results
-    os.makedirs(args.output_dir, exist_ok=True)
     aggregated["overall"].to_parquet(os.path.join(args.output_dir, "overall.parquet"))
     aggregated["by_date"].to_parquet(os.path.join(args.output_dir, "by_date.parquet"))
     aggregated["by_ticker"].to_parquet(os.path.join(args.output_dir, "by_ticker.parquet"))

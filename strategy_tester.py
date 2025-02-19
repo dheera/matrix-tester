@@ -436,7 +436,13 @@ class StrategyTester:
     
     def get_cash(self):
         return self.cash
-    
+  
+    def get_positions(self, ticker = None):
+        if ticker is None:
+            return self.positions
+        else:
+            return self.positions.get(ticker, [])
+
     def get_positions_value(self, d):
         """
         Returns the current total portfolio value (cash + market value of positions)

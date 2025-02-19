@@ -11,8 +11,9 @@ class Strategy:
     EXIT = 100         # exit a position for a ticker regardless of buy or sell
     END_TRADING = 1000 # stop trading for the rest of the day
 
-    def __init__(self, initial_cash):
-        self.initial_cash = initial_cash  # Strategy knows initial cash
+    def __init__(self, tester):
+        self._tester = tester
+
         self.tickers = []  # List of tickers available
 
         self.exit_on_market_close = True
@@ -24,14 +25,24 @@ class Strategy:
         """
         self.tickers = tickers
         
-    def on_step(self, timestamp, d):
-        """
-        This method should be overridden by subclasses to implement trading logic.
-        """
-        return []  # No trading actions by default
+    def get_cash(self):
+        return self._tester.get_cash()
 
+    def get_positions(self, ticker = None):
+        return self._tester.get_positions(ticker)
+
+    def get_positions_value(self):
+        return self._tester.get_positions_value()
+   
+    # Override this
+    def on_step(self, timestamp, d):
+        return [] # Should return a list of trading actions
+
+    # Override this
     def on_start_day(self):
         pass
 
+    # Override this
     def on_end_day(self):
         pass
+
