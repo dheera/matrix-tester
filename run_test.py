@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import pandas as pd
+import shutil
 import os
 import argparse
 import importlib
@@ -109,6 +110,7 @@ if __name__ == "__main__":
         data_files = [get_most_recent_file(args.data_dir)]
 
     os.makedirs(args.output_dir, exist_ok=True)
+    shutil.rmtree(os.path.join(args.output_dir, "daily"))
     os.makedirs(os.path.join(args.output_dir, "daily"), exist_ok=True)
 
     # Run strategies in parallel (Fix: Load strategy inside workers)

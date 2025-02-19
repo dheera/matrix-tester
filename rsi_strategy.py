@@ -27,6 +27,10 @@ class RSIStrategy(Strategy):
         # check all available tickers for overbought and oversold stocks
         for ticker in self.tickers:
 
+            if len(self.get_positions(ticker)) > 0:
+                # don't buy more if we already did
+                continue
+
             if d[ticker, "rsi"] > self.overbought:  # SHORT Signal
                 num_shares = 1000 // d[ticker, "close"]
                 actions.append({
