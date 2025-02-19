@@ -42,21 +42,19 @@ def run_strategy_on_file(data_file, strategy_file):
     df = pd.read_parquet(data_file)
 
     # Extract tickers
-    stock_symbols = set(col.split("_")[0] for col in df.columns if "_volume" in col)
+    stock_symbols = set(df.columns.get_level_values(0).unique())
 
     # Compute ranking metric
     stock_metrics = {
-        stock: (df[f"{stock}_volume"] * df[f"{stock}_close"]).sum()
+        stock: (df[stock, "volume"] * df[stock, "close"]).sum()
         for stock in stock_symbols
-        if f"{stock}_volume" in df.columns and f"{stock}_close" in df.columns
     }
 
     # Rank and select top stocks
     df_ranking = pd.DataFrame(stock_metrics.items(), columns=["Stock", "RankMetric"])
     df_ranking = df_ranking.sort_values(by="RankMetric", ascending=False)
     top_stocks = df_ranking["Stock"].head(256).tolist()
-    selected_columns = [col for col in df.columns if col.split("_")[0] in top_stocks]
-    df_top = df[selected_columns].copy()
+    df_top = df[top_stocks].copy()
 
     # Run strategy
     tester = StrategyTester(strategy_class)

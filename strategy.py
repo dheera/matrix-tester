@@ -17,18 +17,21 @@ class Strategy:
 
         self.exit_on_market_close = True
 
-    def set_tickers(self, tickers):
+    def _set_tickers(self, tickers):
         """
         Extracts available tickers by removing suffixes like _open, _close, _high, _low, _volume, _vwap.
         Stores unique tickers in self.tickers.
         """
         self.tickers = tickers
         
-    def step(self, timestamp, d):
+    def on_step(self, timestamp, d):
         """
         This method should be overridden by subclasses to implement trading logic.
         """
         return []  # No trading actions by default
 
-    def end_day(self):
+    def on_start_day(self):
+        pass
+
+    def on_end_day(self):
         pass

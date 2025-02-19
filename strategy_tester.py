@@ -5,26 +5,6 @@ from tqdm import tqdm
 from strategy import Strategy
 from performance_analyzer import PerformanceAnalyzer
 
-def to_multiindex(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Convert a DataFrame with columns like "AAPL_open", "AAPL_close", ...
-    to a MultiIndex of (ticker, field).
-    
-    E.g. "AAPL_open" => ("AAPL", "open")
-         "MSFT_rsi"  => ("MSFT", "rsi")
-    """
-    new_cols = []
-    for col in df.columns:
-        parts = col.split("_", 1)
-        if len(parts) == 2:
-            ticker, field = parts
-            new_cols.append((ticker, field))
-        else:
-            # If it doesn't match the pattern, store as (col, "")
-            new_cols.append((col, ""))
-    df.columns = pd.MultiIndex.from_tuples(new_cols)
-    return df
-
 class StrategyTester:
     def __init__(self, strategy_class, reset_every_day = True, initial_cash=10000, slippage=0.0, commission=0.0, strategy_args = [], strategy_kwargs = {}):
         """
@@ -379,15 +359,15 @@ class StrategyTester:
         if self.reset_every_day:
             self._reset()
         
-        self.data = to_multiindex(data)
-        
-        self.strategy.set_tickers(sorted(self.data.columns.get_level_values(0).unique()))
-        self.strategy.set_data(self.data)
+        self.data = data
+        self.strategy._set_tickers(sorted(self.data.columns.get_level_values(0).unique()))
 
         # This list holds pending orders: { "execute_at": pd.Timestamp, "action": {...} }
         self.scheduled_orders = []
 
-        for i, (timestamp, d) in enumerate(tqdm(self.data.iterrows(), total=len(self.data))):
+        self.strategy.on_start_day()
+
+        for i, (timestamp, d) in enumerate(tqdm(self.data.iterrows(), total=len(data))):
             # 1) Execute any scheduled orders whose 'execute_at' <= current timestamp
             due_orders = []
             keep_orders = []
@@ -415,7 +395,7 @@ class StrategyTester:
                     continue
 
             # 2) Let the strategy decide new actions (buy, sell, exit) with optional 'execution_delay'
-            actions = self.strategy.step(timestamp, d)
+            actions = self.strategy.on_step(timestamp, d)
             end_trading = False
 
             for action in actions:
@@ -436,7 +416,7 @@ class StrategyTester:
             if end_trading:
                 break
         
-        self.strategy.end_day()
+        self.strategy.on_end_day()
 
         # Analyze performance
         df_overall, df_by_ticker, df_by_hour = PerformanceAnalyzer(self.trades).get_performance()

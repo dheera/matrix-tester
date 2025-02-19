@@ -14,10 +14,17 @@ class RSIStrategy(Strategy):
         self.overbought = overbought
         self.oversold = oversold
 
-    def step(self, timestamp, d):
+    def on_start_day(self):
+        print("Day has started!")
+
+    def on_end_day(self):
+        print("Day has ended!")
+
+    def on_step(self, timestamp, d):
         """Generates trading signals based on RSI column already available in the dataset."""
         actions = []
 
+        # check all available tickers for overbought and oversold stocks
         for ticker in self.tickers:
 
             if d[ticker, "rsi"] > self.overbought:  # SHORT Signal
