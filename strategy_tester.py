@@ -100,9 +100,6 @@ class StrategyTester:
                 profit_color = "\033[92m" if profit >= 0 else "\033[91m"
                 print(f"{profit_color}[EXIT] {timestamp} | {ticker} | "
                       f"Closed {close_amt} SHARES SHORT @ {fill_price:.2f} | Profit: {profit:.2f}, Comm: {comm_cost:.2f}\033[0m")
-
-                # Update cash
-                print(f"close short {notional}")
                 
                 self.cash -= notional      # add proceeds
                 self.cash -= comm_cost     # subtract commission
@@ -142,7 +139,6 @@ class StrategyTester:
                 print(f"{profit_color}[EXIT] {timestamp} | {ticker} | "
                       f"Closed {close_amt} SHARES LONG @ {fill_price:.2f} | Profit: {profit:.2f}, Comm: {comm_cost:.2f}\033[0m")
 
-                print(f"close long {notional}")
                 self.cash += notional
                 self.cash -= comm_cost
 
@@ -187,7 +183,9 @@ class StrategyTester:
                 notional = fill_price * close_amt
                 comm_cost = notional * self.commission
                 profit = (pos["entry_price"] - fill_price) * close_amt
-                print(f"[EXIT] {timestamp} | {ticker} | Closed {close_amt} SHARES SHORT @ {fill_price:.2f} | Profit: {profit:.2f}, Comm: {comm_cost:.2f}")
+                profit_color = "\033[92m" if profit >= 0 else "\033[91m"
+                print(f"{profit_color}[EXIT] {timestamp} | {ticker} | "
+                      f"Closed {close_amt} SHARES LONG @ {fill_price:.2f} | Profit: {profit:.2f}, Comm: {comm_cost:.2f}\033[0m")
                 self.cash -= notional
                 self.cash -= comm_cost
                 pos["shares"] += close_amt  # note: pos["shares"] is negative
@@ -212,7 +210,9 @@ class StrategyTester:
                 notional = fill_price * close_amt
                 comm_cost = notional * self.commission
                 profit = (fill_price - pos["entry_price"]) * close_amt
-                print(f"[EXIT] {timestamp} | {ticker} | Closed {close_amt} SHARES LONG @ {fill_price:.2f} | Profit: {profit:.2f}, Comm: {comm_cost:.2f}")
+                profit_color = "\033[92m" if profit >= 0 else "\033[91m"
+                print(f"{profit_color}[EXIT] {timestamp} | {ticker} | "
+                      f"Closed {close_amt} SHARES LONG @ {fill_price:.2f} | Profit: {profit:.2f}, Comm: {comm_cost:.2f}\033[0m")
                 self.cash += notional
                 self.cash -= comm_cost
                 pos["shares"] -= close_amt
