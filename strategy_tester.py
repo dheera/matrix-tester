@@ -279,7 +279,7 @@ class StrategyTester:
             raise ValueError(f"Skipping buy for {ticker}, computed shares_to_buy={shares_to_buy} <= 0.")
             return
 
-        print(f"[BUY] {timestamp} | {ticker} | Price={price:.2f} => fill={price + self.slippage:.2f}, Shares={shares_to_buy}")
+        print(f"[BUY] {timestamp} | {ticker} | Price={price:.2f} => fill={price + self.slippage:.2f}, Shares={shares_to_buy} | {reason}")
 
         leftover = self._close_positions(
             ticker=ticker,
@@ -347,7 +347,7 @@ class StrategyTester:
         if shares_to_sell < 0:
             raise ValueError(f"Skipping sell for {ticker}, computed shares_to_sell={shares_to_sell} <= 0.")
             
-        print(f"[SELL] {timestamp} | {ticker} | Price={price:.2f} => fill={price - self.slippage:.2f}, Shares={shares_to_sell}")
+        print(f"[SELL] {timestamp} | {ticker} | Price={price:.2f} => fill={price - self.slippage:.2f}, Shares={shares_to_sell} | {reason}")
 
         leftover = self._close_positions(
             ticker=ticker,
