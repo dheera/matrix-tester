@@ -8,15 +8,20 @@ class Strategy:
 
     BUY = 1            # buy (inclding cover short) stock
     SELL = 2           # sell (including short sell) stock
-    EXIT = 100         # exit a position for a ticker regardless of buy or sell
-    END_TRADING = 1000 # stop trading for the rest of the day
+    EXIT = 50          # exit a position for a ticker regardless of buy or sell
+    END_TRADING = 100  # stop trading for the day (signal intention to StrategyTester that it can safely stop processing data for the day)
+
+    LIFO = 1000
+    FIFO = 1001
 
     def __init__(self, tester):
         self._tester = tester
 
         self.tickers = []  # List of tickers available
 
+        # settings
         self.exit_on_market_close = True
+        self.close_positions_order = self.LIFO
 
     def _set_tickers(self, tickers):
         """
@@ -33,7 +38,7 @@ class Strategy:
 
     def get_positions_value(self):
         return self._tester.get_positions_value()
-   
+
     # Override this
     def on_step(self, timestamp, d):
         return [] # Should return a list of trading actions

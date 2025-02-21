@@ -4,6 +4,7 @@ import os, sys
 from tqdm import tqdm
 from strategy import Strategy
 from performance_analyzer import PerformanceAnalyzer
+from aggregate_quoter import AggregateQuoter
 
 class StrategyTester:
     def __init__(self, strategy_class, reset_every_day = True, initial_cash=10000, slippage=0.0, commission=0.0, strategy_args = [], strategy_kwargs = {}):
@@ -19,6 +20,7 @@ class StrategyTester:
         self.commission = commission    # e.g. 0.001 => 0.1% of notional
 
         self.reset_every_day = reset_every_day
+        
         self._reset()
 
     def _reset(self):
@@ -33,7 +35,7 @@ class StrategyTester:
         # each item is { "execute_at": pd.Timestamp, "action": {...} }
         self.scheduled_orders = []
 
-    def _force_close_position(self, ticker, pos, close_price, timestamp=None):
+    def _force_close_position(self, ticker, pos, close_price, timestamp=None, reason=""):
         """
         Force-close a single position (long or short) by calling self._sell(...) or self._buy(...):
          - If shares > 0 => SELL to exit
@@ -49,7 +51,8 @@ class StrategyTester:
                 ticker=ticker,
                 price=close_price,
                 shares=share_count,
-                timestamp=timestamp
+                timestamp=timestamp,
+                reason=reason,
             )
         else:
             # It's a short position, so we BUY all shares to close
@@ -57,10 +60,11 @@ class StrategyTester:
                 ticker=ticker,
                 price=close_price,
                 shares=share_count,
-                timestamp=timestamp
+                timestamp=timestamp,
+                reason=reason,
             )
 
-    def _close_fifo_positions(self, ticker, price, shares_to_close, side_to_close, timestamp):
+    def _close_fifo_positions(self, ticker, price, shares_to_close, side_to_close, timestamp, reason):
         """
         Closes positions in FIFO order.
         :param ticker: Ticker symbol
@@ -114,7 +118,9 @@ class StrategyTester:
                     "fill_price": fill_price,
                     "profit": profit,
                     "commission": comm_cost,
-                    "timestamp": timestamp
+                    "timestamp": timestamp,
+                    "reason_open": pos.get("reason", ""),
+                    "reason_close": reason,
                 })
 
                 if pos["shares"] == 0:
@@ -150,7 +156,9 @@ class StrategyTester:
                     "fill_price": fill_price,
                     "profit": profit,
                     "commission": comm_cost,
-                    "timestamp": timestamp
+                    "timestamp": timestamp,
+                    "reason_open": pos.get("reason", ""),
+                    "reason_close": reason,
                 })
 
                 if pos["shares"] == 0:
@@ -162,7 +170,83 @@ class StrategyTester:
 
         return leftover
 
-    def _buy(self, ticker, price, value=None, shares=None, timestamp=None):
+    def _close_lifo_positions(self, ticker, price, shares_to_close, side_to_close, timestamp, reason):
+        """Close positions using LIFO (last-in, first-out) order."""
+        if ticker not in self.positions:
+            return shares_to_close
+
+        leftover = shares_to_close
+        while self.positions[ticker] and leftover > 0:
+            # Always process the last (most recent) position
+            pos = self.positions[ticker][-1]
+
+            if side_to_close == "short" and pos["shares"] < 0:
+                short_size = abs(pos["shares"])
+                close_amt = min(short_size, leftover)
+                fill_price = price + self.slippage
+                notional = fill_price * close_amt
+                comm_cost = notional * self.commission
+                profit = (pos["entry_price"] - fill_price) * close_amt
+                print(f"[EXIT] {timestamp} | {ticker} | Closed {close_amt} SHARES SHORT @ {fill_price:.2f} | Profit: {profit:.2f}, Comm: {comm_cost:.2f}")
+                self.cash -= notional
+                self.cash -= comm_cost
+                pos["shares"] += close_amt  # note: pos["shares"] is negative
+                leftover -= close_amt
+                self.trades.append({
+                    "action": self.strategy.EXIT,
+                    "ticker": ticker,
+                    "shares": close_amt,
+                    "fill_price": fill_price,
+                    "profit": profit,
+                    "commission": comm_cost,
+                    "timestamp": timestamp,
+                    "reason_open": pos.get("reason", ""),
+                    "reason_close": reason,
+                })
+                if pos["shares"] == 0:
+                    self.positions[ticker].pop()  # remove the last element
+            elif side_to_close == "long" and pos["shares"] > 0:
+                long_size = pos["shares"]
+                close_amt = min(long_size, leftover)
+                fill_price = price - self.slippage
+                notional = fill_price * close_amt
+                comm_cost = notional * self.commission
+                profit = (fill_price - pos["entry_price"]) * close_amt
+                print(f"[EXIT] {timestamp} | {ticker} | Closed {close_amt} SHARES LONG @ {fill_price:.2f} | Profit: {profit:.2f}, Comm: {comm_cost:.2f}")
+                self.cash += notional
+                self.cash -= comm_cost
+                pos["shares"] -= close_amt
+                leftover -= close_amt
+                self.trades.append({
+                    "action": self.strategy.EXIT,
+                    "ticker": ticker,
+                    "shares": close_amt,
+                    "fill_price": fill_price,
+                    "profit": profit,
+                    "commission": comm_cost,
+                    "timestamp": timestamp,
+                    "reason_open": pos.get("reason", ""),
+                    "reason_close": reason,
+                })
+                if pos["shares"] == 0:
+                    self.positions[ticker].pop()
+            else:
+                # If the last position is not eligible, break to avoid an infinite loop.
+                break
+
+        return leftover
+
+    def _close_positions(self, ticker, price, shares_to_close, side_to_close, timestamp, reason):
+        """Choose FIFO or LIFO closing based on strategy settings."""
+        order = getattr(self.strategy, "close_positions_order", "fifo")
+        if order == Strategy.LIFO:
+            return self._close_lifo_positions(ticker, price, shares_to_close, side_to_close, timestamp, reason)
+        elif order == Strategy.FIFO:
+            return self._close_fifo_positions(ticker, price, shares_to_close, side_to_close, timestamp, reason)
+        else:
+            raise ValueError(f"Unknown close_positions_order value of {order}")
+
+    def _buy(self, ticker, price, value=None, shares=None, timestamp=None, reason=""):
         """
         Executes a buy order by first closing any open short positions (FIFO)
         before opening new long positions (if leftover shares remain).
@@ -197,12 +281,13 @@ class StrategyTester:
 
         print(f"[BUY] {timestamp} | {ticker} | Price={price:.2f} => fill={price + self.slippage:.2f}, Shares={shares_to_buy}")
 
-        leftover = self._close_fifo_positions(
+        leftover = self._close_positions(
             ticker=ticker,
             price=price,
             shares_to_close=shares_to_buy,
             side_to_close="short",
-            timestamp=timestamp
+            timestamp=timestamp,
+            reason=reason,
         )
 
         if leftover > 0:
@@ -215,7 +300,8 @@ class StrategyTester:
 
             self.positions[ticker].append({
                 "entry_price": fill_price,
-                "shares": leftover
+                "shares": leftover,
+                "reason": reason,
             })
             # subtract cost + commission
             self.cash -= notional
@@ -229,10 +315,10 @@ class StrategyTester:
                 "shares": leftover,
                 "fill_price": fill_price,
                 "commission": comm_cost,
-                "timestamp": timestamp
+                "timestamp": timestamp,
             })
 
-    def _sell(self, ticker, price, value=None, shares=None, timestamp=None):
+    def _sell(self, ticker, price, value=None, shares=None, timestamp=None, reason=""):
         """
         Executes a sell order by first closing any open long positions (FIFO)
         before opening new short positions (if leftover shares remain).
@@ -263,12 +349,13 @@ class StrategyTester:
             
         print(f"[SELL] {timestamp} | {ticker} | Price={price:.2f} => fill={price - self.slippage:.2f}, Shares={shares_to_sell}")
 
-        leftover = self._close_fifo_positions(
+        leftover = self._close_positions(
             ticker=ticker,
             price=price,
             shares_to_close=shares_to_sell,
             side_to_close="long",
-            timestamp=timestamp
+            timestamp=timestamp,
+            reason=reason,
         )
 
         if leftover > 0:
@@ -281,7 +368,8 @@ class StrategyTester:
 
             self.positions[ticker].append({
                 "entry_price": fill_price,
-                "shares": -leftover
+                "shares": -leftover,
+                "reason": reason,
             })
 
             # We'll credit the notional but also subtract commission?
@@ -300,10 +388,10 @@ class StrategyTester:
                 "shares": -leftover,
                 "fill_price": fill_price,
                 "commission": comm_cost,
-                "timestamp": timestamp
+                "timestamp": timestamp,
             })
 
-    def _exit(self, ticker, price, timestamp=None):
+    def _exit(self, ticker, price, timestamp=None, reason=""):
         """
         Reuses buy/sell logic to close each position.
         We'll keep looping until no positions remain.
@@ -313,7 +401,7 @@ class StrategyTester:
 
         while self.positions[ticker]:
             pos = self.positions[ticker][0]
-            self._force_close_position(ticker, pos, price, timestamp)
+            self._force_close_position(ticker, pos, price, timestamp, reason)
 
         # print(f"\033[96m[EXIT] {timestamp} | {ticker} | All positions closed @ {price:.2f}\033[0m")
 
@@ -328,6 +416,7 @@ class StrategyTester:
 
         val = action.get("value")
         num_shares = action.get("shares")
+        reason = action.get("reason", "")
 
         if action_type == Strategy.BUY:
             self._buy(
@@ -335,7 +424,8 @@ class StrategyTester:
                 price=close_price,
                 value=val,
                 shares=num_shares,
-                timestamp=timestamp
+                timestamp=timestamp,
+                reason=reason,
             )
         elif action_type == Strategy.SELL:
             self._sell(
@@ -343,10 +433,11 @@ class StrategyTester:
                 price=close_price,
                 value=val,
                 shares=num_shares,
-                timestamp=timestamp
+                timestamp=timestamp,
+                reason=reason,
             )
         elif action_type == Strategy.EXIT:
-            self._exit(tkr, close_price, timestamp)
+            self._exit(tkr, close_price, timestamp, reason=reason)
 
     def run(self, data):
         """
@@ -361,6 +452,7 @@ class StrategyTester:
         
         self.trades = []
         self.data = data
+
         self.strategy._set_tickers(sorted(self.data.columns.get_level_values(0).unique()))
 
         # This list holds pending orders: { "execute_at": pd.Timestamp, "action": {...} }

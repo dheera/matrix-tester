@@ -106,7 +106,7 @@ if __name__ == "__main__":
     parser.add_argument("--commission", type=float, default=0.0, help="Commission per trade (%)")
     parser.add_argument("--output-dir", type=str, default="output", help="Output directory to put aggregated parquet output")
     parser.add_argument("--mode", type=str, default="parallel", help="parallel|sequential")
-    parser.add_argument("--data-dir", type=str, default="/fin/us_stocks_sip/minute_aggs_matrix", help="Where is the data")
+    parser.add_argument("--data-dir", type=str, default="/fin/us_stocks_sip/minute_aggs_matrix_2048", help="Where is the data")
     parser.add_argument("--num-workers", type=int, default=min(8, os.cpu_count()) , help="How many workers")
 
     args = parser.parse_args()

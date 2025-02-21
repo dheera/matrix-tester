@@ -37,12 +37,14 @@ class RSIStrategy(Strategy):
                     "action": Strategy.SELL,
                     "ticker": ticker,
                     "shares": num_shares,
+                    "reason": f"shorted because rsi was overbought at {d[ticker, 'rsi']}",
                 })
                 actions.append({
                     "action": Strategy.BUY,
                     "ticker": ticker,
                     "shares": num_shares,
                     "execution_delay": 10,
+                    "reason": "covered after 10 minutes",
                 })
 
             elif d[ticker, "rsi"] < self.oversold:  # LONG Signal
@@ -50,13 +52,15 @@ class RSIStrategy(Strategy):
                 actions.append({
                     "action": Strategy.BUY,
                     "ticker": ticker,
-                    "shares": num_shares,  
+                    "shares": num_shares,
+                    "reason": f"bought because rsi was oversold at {d[ticker, 'rsi']}",
                 })
                 actions.append({
                     "action": Strategy.SELL,
                     "ticker": ticker,
                     "shares": num_shares,
                     "execution_delay": 10,
+                    "reason": "sold after 10 minutes",
                 })
 
         return actions
