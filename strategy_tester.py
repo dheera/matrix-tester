@@ -7,7 +7,7 @@ from performance_analyzer import PerformanceAnalyzer
 from aggregate_quoter import AggregateQuoter
 
 class StrategyTester:
-    def __init__(self, strategy_class, reset_every_day = True, initial_cash=10000, slippage=0.0, commission=0.0, strategy_args = [], strategy_kwargs = {}):
+    def __init__(self, strategy_class, reset_every_day=True, initial_cash=10000, slippage=0.0, commission=0.0, strategy_args=[], strategy_kwargs={}):
         """
         :param strategy_class: The strategy class to instantiate.
         :param initial_cash: Starting account balance.
@@ -68,7 +68,7 @@ class StrategyTester:
         """
         Closes positions in FIFO order.
         :param ticker: Ticker symbol
-        :param price: Current market price
+        :param price: Current market price (should be ask for BUY or bid for SELL orders)
         :param shares_to_close: How many shares we need to close (always positive)
         :param side_to_close: 'short' => close negative positions, 'long' => close positive positions
         :param timestamp: Current timestamp
@@ -185,7 +185,7 @@ class StrategyTester:
                 profit = (pos["entry_price"] - fill_price) * close_amt
                 profit_color = "\033[92m" if profit >= 0 else "\033[91m"
                 print(f"{profit_color}[EXIT] {timestamp} | {ticker} | "
-                      f"Closed {close_amt} SHARES LONG @ {fill_price:.2f} | Profit: {profit:.2f}, Comm: {comm_cost:.2f}\033[0m")
+                      f"Closed {close_amt} SHARES SHORT @ {fill_price:.2f} | Profit: {profit:.2f}, Comm: {comm_cost:.2f}\033[0m")
                 self.cash -= notional
                 self.cash -= comm_cost
                 pos["shares"] += close_amt  # note: pos["shares"] is negative
@@ -231,7 +231,6 @@ class StrategyTester:
                 if pos["shares"] == 0:
                     self.positions[ticker].pop()
             else:
-                # If the last position is not eligible, break to avoid an infinite loop.
                 break
 
         return leftover
@@ -246,6 +245,24 @@ class StrategyTester:
         else:
             raise ValueError(f"Unknown close_positions_order value of {order}")
 
+    def _get_market_price(self, ticker, row, side):
+        """
+        Helper: returns the market price for the ticker from the current row.
+        If bid/ask columns exist then:
+          - For 'buy' orders, returns the ask price.
+          - For 'sell' orders, returns the bid price.
+        Otherwise, returns the close price.
+        """
+        if (ticker, "bid") in row and (ticker, "ask") in row:
+            if side == "buy":
+                return row[ticker, "ask"]
+            elif side == "sell":
+                return row[ticker, "bid"]
+            else:
+                raise ValueError("side must be 'buy' or 'sell'")
+        else:
+            return row[ticker, "close"]
+
     def _buy(self, ticker, price, value=None, shares=None, timestamp=None, reason=""):
         """
         Executes a buy order by first closing any open short positions (FIFO)
@@ -253,18 +270,19 @@ class StrategyTester:
         The strategy can specify either 'value' or 'shares' (but not both).
 
         Slippage & commission:
-          fill_price = price + self.slippage for any new buy
-          commission = fill_price * shares_bought * self.commission
+          For new buy orders, fill_price = price + self.slippage
+          Commission = fill_price * shares_bought * self.commission
         """
-        
+        # Check that data contains either a "close" column or both "bid" and "ask" columns.
+        if not (((ticker, "close") in self.data.columns) or (((ticker, "bid") in self.data.columns) and ((ticker, "ask") in self.data.columns))):
+            raise KeyError(f"Price data not found for {ticker}. Expected either close or bid/ask columns.")
+
         if value in (0, 0.0, None) and shares in (0, 0.0, None):
             return
         
         if price is None or price <= 0:
             raise ValueError(f"Invalid price={price} for {ticker}")
-        if (ticker, "close") not in self.data.columns:
-            raise KeyError(f"{ticker}_close not found in DataFrame columns")
-
+        
         if shares is not None and shares > 0:
             shares_to_buy = shares
         elif value is not None and value > 0:
@@ -277,7 +295,6 @@ class StrategyTester:
         
         if shares_to_buy < 0:
             raise ValueError(f"Skipping buy for {ticker}, computed shares_to_buy={shares_to_buy} <= 0.")
-            return
 
         print(f"[BUY] {timestamp} | {ticker} | Price={price:.2f} => fill={price + self.slippage:.2f}, Shares={shares_to_buy} | {reason}")
 
@@ -307,8 +324,6 @@ class StrategyTester:
             self.cash -= notional
             self.cash -= comm_cost
 
-            # print(f"[OPEN LONG] {timestamp} | {ticker} | +{leftover} @ {fill_price:.2f}, Comm={comm_cost:.2f}")
-
             self.trades.append({
                 "action": Strategy.BUY,
                 "ticker": ticker,
@@ -323,13 +338,15 @@ class StrategyTester:
         Executes a sell order by first closing any open long positions (FIFO)
         before opening new short positions (if leftover shares remain).
         Slippage & commission:
-          fill_price = price - self.slippage for new short
-          commission = fill_price * shares_sold * self.commission
+          For new short orders, fill_price = price - self.slippage
+          Commission = fill_price * shares_sold * self.commission
         """
+        # Check that data contains either a "close" column or both "bid" and "ask" columns.
+        if not (((ticker, "close") in self.data.columns) or (((ticker, "bid") in self.data.columns) and ((ticker, "ask") in self.data.columns))):
+            raise KeyError(f"Price data not found for {ticker}. Expected either close or bid/ask columns.")
+
         if price is None or price <= 0:
             raise ValueError(f"Invalid price={price} for {ticker}")
-        if (ticker, "close") not in self.data.columns:
-            raise KeyError(f"{ticker}_close not found in DataFrame columns")
 
         if value in (0, 0.0, None) and shares in (0, 0.0, None):
             return
@@ -372,15 +389,8 @@ class StrategyTester:
                 "reason": reason,
             })
 
-            # We'll credit the notional but also subtract commission?
-            # Actually for short open, we might not do anything with self.cash if no margin is required.
-            # If your logic requires, you could do self.cash += notional, then subtract comm_cost, etc.
-            # We'll skip adding to self.cash here or do partial if you want.
-
             self.cash += notional
             self.cash -= comm_cost
-
-            # print(f"[OPEN SHORT] {timestamp} | {ticker} | -{leftover} @ {fill_price:.2f}, Comm={comm_cost:.2f}")
 
             self.trades.append({
                 "action": Strategy.SELL,
@@ -391,55 +401,63 @@ class StrategyTester:
                 "timestamp": timestamp,
             })
 
-    def _exit(self, ticker, price, timestamp=None, reason=""):
+    def _exit(self, ticker, row, timestamp=None, reason=""):
         """
         Reuses buy/sell logic to close each position.
-        We'll keep looping until no positions remain.
+        For each open position, the appropriate market price is chosen based on its direction:
+         - For a long position, we use the 'sell' price (bid)
+         - For a short position, we use the 'buy' price (ask)
         """
         if ticker not in self.positions or not self.positions[ticker]:
             return
 
         while self.positions[ticker]:
             pos = self.positions[ticker][0]
-            self._force_close_position(ticker, pos, price, timestamp, reason)
-
-        # print(f"\033[96m[EXIT] {timestamp} | {ticker} | All positions closed @ {price:.2f}\033[0m")
+            if pos["shares"] > 0:
+                market_price = self._get_market_price(ticker, row, "sell")
+            else:
+                market_price = self._get_market_price(ticker, row, "buy")
+            self._force_close_position(ticker, pos, market_price, timestamp, reason)
 
     def _execute_order(self, action, timestamp, row):
         """
-        Executes a single action (BUY/SELL/EXIT) immediately using the row's close_price
-        for that ticker.
+        Executes a single action (BUY/SELL/EXIT) immediately using the current market prices.
+        For data with bid/ask columns:
+          - BUY orders use the ask price.
+          - SELL orders use the bid price.
+          - EXIT orders determine the price based on the position's direction.
         """
         action_type = action["action"]
         tkr = action["ticker"]
-        close_price = row[tkr, "close"]
-
-        val = action.get("value")
-        num_shares = action.get("shares")
         reason = action.get("reason", "")
-
         if action_type == Strategy.BUY:
+            market_price = self._get_market_price(tkr, row, "buy")
+            val = action.get("value")
+            num_shares = action.get("shares")
             self._buy(
                 ticker=tkr,
-                price=close_price,
+                price=market_price,
                 value=val,
                 shares=num_shares,
                 timestamp=timestamp,
                 reason=reason,
             )
         elif action_type == Strategy.SELL:
+            market_price = self._get_market_price(tkr, row, "sell")
+            val = action.get("value")
+            num_shares = action.get("shares")
             self._sell(
                 ticker=tkr,
-                price=close_price,
+                price=market_price,
                 value=val,
                 shares=num_shares,
                 timestamp=timestamp,
                 reason=reason,
             )
         elif action_type == Strategy.EXIT:
-            self._exit(tkr, close_price, timestamp, reason=reason)
+            self._exit(tkr, row, timestamp, reason)
 
-    def run(self, data, force_exit_on_market_close = False):
+    def run(self, data, force_exit_on_market_close=False):
         """
         Runs the strategy over the provided DataFrame, minute by minute, applying slippage & commission.
         On the last minute (row), forcibly exits all positions and does not allow new trades.
@@ -460,7 +478,6 @@ class StrategyTester:
         self.scheduled_orders = []
 
         self.strategy.on_start_day()
-
 
         print(f"Starting cash:", self.get_cash())
 
@@ -483,11 +500,9 @@ class StrategyTester:
             if self.strategy.exit_on_market_close or force_exit_on_market_close:
                 if i == len(data) - 1:
                     for tkr in list(self.positions.keys()):
-                        close_price = d[tkr, "close"]
-                        if close_price is None:
-                            raise ValueError(f"{tkr} not found in row")
-                        self._exit(tkr, close_price, timestamp)
-                    # discard any remaining scheduled orders
+                        # Instead of a single close price, pass the entire row to _exit
+                        self._exit(tkr, d, timestamp)
+                    # Discard any remaining scheduled orders
                     self.scheduled_orders.clear()
                     continue
 
@@ -547,7 +562,7 @@ class StrategyTester:
     def get_cash(self):
         return self.cash
   
-    def get_positions(self, ticker = None):
+    def get_positions(self, ticker=None):
         if ticker is None:
             return self.positions
         else:
@@ -561,15 +576,15 @@ class StrategyTester:
         total_value = 0
 
         for ticker, pos_list in self.positions.items():
-            # pos_list is a list of dicts like {"entry_price": ..., "shares": ...}
-            # If you store multiple partial positions, sum them all
             for pos in pos_list:
                 shares = pos["shares"]
-                # Use the current close price from the multiindex row
-                current_price = d[ticker, "close"]
-                # Market value of this position
-                position_value = shares * current_price
+                # If bid/ask data exists, use them appropriately:
+                if (ticker, "bid") in d and (ticker, "ask") in d:
+                    # For long positions, use bid (selling), for short, use ask (buying to cover)
+                    price = d[ticker, "bid"] if shares > 0 else d[ticker, "ask"]
+                else:
+                    price = d[ticker, "close"]
+                position_value = shares * price
                 total_value += position_value
 
         return total_value
-

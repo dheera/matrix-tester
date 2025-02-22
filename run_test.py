@@ -38,7 +38,6 @@ def load_strategy(strategy_file):
 def read_merged(files):
     dfs = []
     for ticker in files:
-        print(files[ticker])
         df = pd.read_parquet(files[ticker])
         df.columns = pd.MultiIndex.from_product([[ticker], df.columns])
         dfs.append(df)
@@ -147,7 +146,7 @@ if __name__ == "__main__":
         start = args.date
         end = args.date
     elif args.start and args.end:
-        start = args.end
+        start = args.start
         end = args.end
     else:
         start = None
