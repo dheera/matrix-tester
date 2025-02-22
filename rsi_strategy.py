@@ -9,7 +9,7 @@ from strategy import Strategy
 class RSIStrategy(Strategy):
     """RSI-based trading strategy"""
 
-    def __init__(self, tester, overbought=90, oversold=10):
+    def __init__(self, tester, overbought=70, oversold=30):
         super().__init__(tester)
         self.overbought = overbought
         self.oversold = oversold

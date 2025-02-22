@@ -18,10 +18,13 @@ class Strategy:
         self._tester = tester
 
         self.tickers = []  # List of tickers available
+        self.request_tickers = []
 
         # settings
         self.exit_on_market_close = True
         self.close_positions_order = self.LIFO
+        self._data_mode = "ohlc"
+        self._request_tickers = []
 
     def _set_tickers(self, tickers):
         """
@@ -36,8 +39,8 @@ class Strategy:
     def get_positions(self, ticker = None):
         return self._tester.get_positions(ticker)
 
-    def get_positions_value(self):
-        return self._tester.get_positions_value()
+    def get_positions_value(self, d):
+        return self._tester.get_positions_value(d)
 
     # Override this
     def on_step(self, timestamp, d):

@@ -439,7 +439,7 @@ class StrategyTester:
         elif action_type == Strategy.EXIT:
             self._exit(tkr, close_price, timestamp, reason=reason)
 
-    def run(self, data):
+    def run(self, data, force_exit_on_market_close = False):
         """
         Runs the strategy over the provided DataFrame, minute by minute, applying slippage & commission.
         On the last minute (row), forcibly exits all positions and does not allow new trades.
@@ -451,6 +451,7 @@ class StrategyTester:
             self._reset()
         
         self.trades = []
+        action_log = []
         self.data = data
 
         self.strategy._set_tickers(sorted(self.data.columns.get_level_values(0).unique()))
@@ -460,7 +461,6 @@ class StrategyTester:
 
         self.strategy.on_start_day()
 
-        action_log = []
 
         print(f"Starting cash:", self.get_cash())
 
@@ -480,7 +480,7 @@ class StrategyTester:
                 self._execute_order(so["action"], timestamp, d)
 
             # If this is the last row: forcibly exit all trades, no new trades
-            if self.strategy.exit_on_market_close:
+            if self.strategy.exit_on_market_close or force_exit_on_market_close:
                 if i == len(data) - 1:
                     for tkr in list(self.positions.keys()):
                         close_price = d[tkr, "close"]
@@ -537,8 +537,11 @@ class StrategyTester:
 
         print("Performance summary:")
         print(df_overall)
-        print(f"Ending portfolio value:", self.get_positions_value(d) + self.get_cash())
-        print(f"Ending cash:", self.get_cash())
+        portfolio_value = self.get_positions_value(d)
+        cash_value = self.get_cash()
+        print(f"Ending portfolio value:", portfolio_value)
+        print(f"Ending cash:", cash_value)
+        print(f"Ending total value:", portfolio_value + cash_value)
         return results
     
     def get_cash(self):
