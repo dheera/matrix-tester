@@ -123,7 +123,7 @@ def run_strategy_on_file(data_files, strategy_file, output_dir, slippage, commis
         # Run strategy
         results = tester.run(
             df,
-            force_exit_on_market_close = (i == len(data_files) - 1),
+            force_exit_on_market_close = (i == len(data_files) - 1), # we need to force exit for the last day in sequential
         )
     
         # Add date column for aggregation
@@ -206,7 +206,7 @@ if __name__ == "__main__":
     data_mode = example_strategy_instance._data_mode
     request_stocks = example_strategy_instance._request_stocks
     request_options = example_strategy_instance._request_options
-    exit_on_market_close = example_strategy_instance.exit_on_market_close
+    exit_on_market_close = example_strategy_instance._exit_on_market_close
 
     if (not exit_on_market_close) and args.mode == "parallel":
         print("Warning: Because the selected strategy does not exit on market close, sequential mode is being forced since you cannot evaluate multiple days simultaneously")

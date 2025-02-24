@@ -238,13 +238,13 @@ class StrategyTester:
 
     def _close_positions(self, ticker, price, shares_to_close, side_to_close, timestamp, reason):
         """Choose FIFO or LIFO closing based on strategy settings."""
-        order = getattr(self.strategy, "close_positions_order", "fifo")
+        order = getattr(self.strategy, "_close_positions_order", "fifo")
         if order == Strategy.LIFO:
             return self._close_lifo_positions(ticker, price, shares_to_close, side_to_close, timestamp, reason)
         elif order == Strategy.FIFO:
             return self._close_fifo_positions(ticker, price, shares_to_close, side_to_close, timestamp, reason)
         else:
-            raise ValueError(f"Unknown close_positions_order value of {order}")
+            raise ValueError(f"Unknown _close_positions_order value of {order}")
 
     def _get_market_price(self, ticker, row, side, fill_at_mid_price = False):
         """
@@ -502,7 +502,7 @@ class StrategyTester:
                 self._execute_order(so["action"], timestamp, d)
 
             # If this is the last row: forcibly exit all trades, no new trades
-            if self.strategy.exit_on_market_close or force_exit_on_market_close:
+            if self.strategy._exit_on_market_close or force_exit_on_market_close:
                 if i == len(data) - 1:
                     for tkr in list(self.positions.keys()):
                         # Instead of a single close price, pass the entire row to _exit

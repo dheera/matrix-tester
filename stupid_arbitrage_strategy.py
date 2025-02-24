@@ -42,7 +42,7 @@ class StupidArbitrageStrategy(Strategy):
         # ask simulator for data for for these tickers, need to do this for bidask mode
         self._request_stocks = [x, y]
         # ask simulator to not close all trades at the end of day since this is a swing strategy
-        self.exit_on_market_close = False
+        self._exit_on_market_close = False
 
 
     def on_step(self, timestamp, d):

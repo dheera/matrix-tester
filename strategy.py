@@ -24,8 +24,8 @@ class Strategy:
         self.request_options = []
 
         # settings
-        self.exit_on_market_close = True
-        self.close_positions_order = self.LIFO
+        self._exit_on_market_close = True
+        self._close_positions_order = self.LIFO
 
         # "ohlc" mode, gets minute aggregate data for 1024+ stocks; options not yet supported
         # can use slippage/commission parameters to simulate slippage
