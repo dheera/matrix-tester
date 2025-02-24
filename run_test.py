@@ -202,7 +202,7 @@ if __name__ == "__main__":
 
     strategy_args = parse_strategy_args(args.strategy_args)
 
-    example_strategy_instance = load_strategy(args.strategy_file, **strategy_args)(tester=None)
+    example_strategy_instance = load_strategy(args.strategy_file)(tester=None, **strategy_args)
     data_mode = example_strategy_instance._data_mode
     request_stocks = example_strategy_instance._request_stocks
     request_options = example_strategy_instance._request_options
