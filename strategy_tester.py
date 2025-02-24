@@ -9,14 +9,14 @@ from performance_analyzer import PerformanceAnalyzer
 from aggregate_quoter import AggregateQuoter
 
 class StrategyTester:
-    def __init__(self, strategy_class, reset_every_day=True, initial_cash=10000, slippage=0.0, commission=0.0, strategy_args=[], strategy_kwargs={}):
+    def __init__(self, strategy_class, reset_every_day=True, initial_cash=10000, slippage=0.0, commission=0.0, strategy_args={}):
         """
         :param strategy_class: The strategy class to instantiate.
         :param initial_cash: Starting account balance.
         :param slippage: Per-share slippage cost. e.g. 0.01 means +0.01 on buys, -0.01 on sells.
         :param commission: Fractional commission on notional. e.g. 0.0005 => 0.05%.
         """
-        self.strategy = strategy_class(self, *strategy_args, **strategy_kwargs)
+        self.strategy = strategy_class(self, **strategy_args)
         self.initial_cash = initial_cash
         self.slippage = slippage        # e.g. 0.01 => add 0.01 to buy price, subtract 0.01 from sell price
         self.commission = commission    # e.g. 0.001 => 0.1% of notional
@@ -246,7 +246,7 @@ class StrategyTester:
         else:
             raise ValueError(f"Unknown close_positions_order value of {order}")
 
-    def _get_market_price(self, ticker, row, side):
+    def _get_market_price(self, ticker, row, side, fill_at_mid_price = False):
         """
         Helper: returns the market price for the ticker from the current row.
         If bid/ask columns exist then:
@@ -255,6 +255,8 @@ class StrategyTester:
         Otherwise, returns the close price.
         """
         if (ticker, "bid") in row and (ticker, "ask") in row:
+            if fill_at_mid_price:
+                return (row[ticker, "bid"] + row[ticker, "ask"]) / 2
             if side == "buy":
                 return row[ticker, "ask"]
             elif side == "sell":
@@ -281,8 +283,9 @@ class StrategyTester:
         if value in (0, 0.0, None) and shares in (0, 0.0, None):
             return
         
-        if price is None or price <= 0:
-            raise ValueError(f"Invalid price={price} for {ticker}")
+        if not ticker.startswith("O:"):
+            if price is None or price <= 0:
+                raise ValueError(f"Invalid price={price} for {ticker}")
         
         if shares is not None and shares > 0:
             shares_to_buy = shares
@@ -346,8 +349,9 @@ class StrategyTester:
         if not (((ticker, "close") in self.data.columns) or (((ticker, "bid") in self.data.columns) and ((ticker, "ask") in self.data.columns))):
             raise KeyError(f"Price data not found for {ticker}. Expected either close or bid/ask columns.")
 
-        if price is None or price <= 0:
-            raise ValueError(f"Invalid price={price} for {ticker}")
+        if not ticker.startswith("O:"):
+            if price is None or price <= 0:
+                raise ValueError(f"Invalid price={price} for {ticker}")
 
         if value in (0, 0.0, None) and shares in (0, 0.0, None):
             return
