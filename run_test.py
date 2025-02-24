@@ -38,9 +38,54 @@ def load_strategy(strategy_file):
 def read_merged(files):
     dfs = []
     for ticker in files:
-        df = pd.read_parquet(files[ticker])
-        df.columns = pd.MultiIndex.from_product([[ticker], df.columns])
-        dfs.append(df)
+        if ticker.startswith("_"): # ignore the _date key
+            continue
+
+        if "stocks" in files[ticker]:
+            print(f'Reading stocks data from {files[ticker]["stocks"]}')
+            df = pd.read_parquet(files[ticker]["stocks"])
+            df.columns = pd.MultiIndex.from_product([[ticker], df.columns])
+            dfs.append(df)
+
+        if "options" in files[ticker]:
+            print(f'Reading options data from {files[ticker]["options"]}')
+            df = pd.read_parquet(files[ticker]["options"])
+            
+            df = df.reset_index()
+
+            # Create the ticker column e.g. O:XSP25.....
+            # Here, we assume that the underlying symbol is 'XSP'.
+            # Multiply the strike by 1000 and format as an 8-digit number.
+            df['ticker'] = (
+                'O:' + ticker +
+                df['expiry'].astype(str) +
+                df['type'] +
+                (df['strike'] * 1000).astype(int).apply(lambda x: f"{x:08d}")
+            )
+
+            # Pivot the DataFrame so that 'window_start' becomes the row index and
+            # the columns are the metrics, grouped by ticker.
+            pivot_df = df.pivot(
+                index='window_start',
+                columns='ticker',
+                values=['last', 'last_size', 'volume', 'bid', 'bid_size', 'ask', 'ask_size']
+            )
+
+            # By default, this gives a MultiIndex on the columns with the metric as the first level.
+            # Swap levels so that the ticker is the top level.
+            pivot_df = pivot_df.swaplevel(0, 1, axis=1).sort_index(axis=1)
+
+            volume_cols = [col for col in pivot_df.columns if col[1] == 'volume']
+            non_volume_cols = [col for col in pivot_df.columns if col[1] != 'volume']
+
+            # Forward fill the non-volume columns (bid, ask, bid_size, ask_size, last, last_size) along the index:
+            pivot_df[non_volume_cols] = pivot_df[non_volume_cols].ffill()
+
+            # For volume columns, instead of forward filling, replace NaNs with 0:
+            pivot_df[volume_cols] = pivot_df[volume_cols].fillna(0)
+
+            dfs.append(pivot_df)
+
     return pd.concat(dfs, axis = 1, join = "inner")
 
 def run_strategy_on_file(data_files, strategy_file, output_dir, slippage, commission):
@@ -83,7 +128,7 @@ def run_strategy_on_file(data_files, strategy_file, output_dir, slippage, commis
     
         # Add date column for aggregation
         if type(data_file) is dict:
-            date = list(data_file.values())[0].split("/")[-1].rsplit("-", 1)[0]
+            date = data_file["_date"]
         else:
             date = data_file.split("/")[-1].replace(".parquet", "")
         if results["overall_performance"] is not None:
@@ -126,7 +171,8 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", type=str, default="output", help="Output directory to put aggregated parquet output")
     parser.add_argument("--mode", type=str, default="parallel", help="parallel|sequential")
     parser.add_argument("--matrix-dir", type=str, default="/fin/us_stocks_sip/minute_aggs_matrix_2048", help="Matrix data dir")
-    parser.add_argument("--tq-aggs-dir", type=str, default="/fin/us_stocks_sip/tq_aggs", help="TQ aggs data dir")
+    parser.add_argument("--stocks-tq-aggs-dir", type=str, default="/fin/us_stocks_sip/tq_aggs", help="Stocks TQ aggs data dir")
+    parser.add_argument("--options-tq-aggs-dir", type=str, default="/fin/us_options_opra/tq_aggs", help="Options TQ aggs data dir")
     parser.add_argument("--num-workers", type=int, default=min(8, os.cpu_count()) , help="How many workers")
 
     args = parser.parse_args()
@@ -134,7 +180,8 @@ if __name__ == "__main__":
     # Load an example strategy instance so that we can see what kind of data it requests
     example_strategy_instance = load_strategy(args.strategy_file)(tester=None)
     data_mode = example_strategy_instance._data_mode
-    request_tickers = example_strategy_instance._request_tickers
+    request_stocks = example_strategy_instance._request_stocks
+    request_options = example_strategy_instance._request_options
     exit_on_market_close = example_strategy_instance.exit_on_market_close
 
     if (not exit_on_market_close) and args.mode == "parallel":
@@ -159,9 +206,9 @@ if __name__ == "__main__":
         data_files = get_files_in_range(args.matrix_dir, start, end)
     elif data_mode == "bidask":
         if start is None and end is None:
-            start = end = get_most_recent_date(args.tq_aggs_dir)
+            start = end = get_most_recent_date(args.stocks_tq_aggs_dir)
             print(f"Warning: No date specified, processing on most recent date {start}")
-        data_files = get_ticker_files_in_range(args.tq_aggs_dir, start, end, tickers = request_tickers)
+        data_files = get_ticker_files_in_range(args.stocks_tq_aggs_dir, args.options_tq_aggs_dir, start, end, stocks = request_stocks, options = request_options)
 
     if len(data_files) == 0:
         print("No data in range to process, exiting.")
@@ -171,7 +218,8 @@ if __name__ == "__main__":
 
     print("data mode:", data_mode)
     print("run mode:", args.mode)
-    print("request tickers:", request_tickers)
+    print("request stocks:", request_stocks)
+    print("request options:", request_options)
     print("date range:", start, "->", end)
     print("data files:", data_files)
 

@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import pandas as pd
 import numpy as np
 import os, sys
@@ -20,7 +22,6 @@ class StrategyTester:
         self.commission = commission    # e.g. 0.001 => 0.1% of notional
 
         self.reset_every_day = reset_every_day
-        
         self._reset()
 
     def _reset(self):

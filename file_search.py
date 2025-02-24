@@ -24,24 +24,44 @@ def get_files_in_range(directory, start_date, end_date):
 
     return [os.path.join(directory, f) for f in filtered_files]
 
-def get_ticker_files_in_range(directory, start_date, end_date, tickers = []):
+def get_ticker_files_in_range(stocks_directory, options_directory, start_date, end_date, stocks = [], options = []):
     """Finds all .parquet files in the directory that fall within the date range for the ticker."""
 
-    if len(tickers) == 0:
-        raise ValueError("Must request at least 1 ticker.")
+    if len(stocks)== 0:
+        raise ValueError("Must request at least 1 stock ticker.")
 
-    files = sorted([f for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))])
+    stocks_subdirs = sorted([f for f in os.listdir(stocks_directory) if os.path.isdir(os.path.join(stocks_directory, f))])
+    options_subdirs = sorted([f for f in os.listdir(options_directory) if os.path.isdir(os.path.join(options_directory, f))])
     
-    filtered_subdirs = [
-        f for f in files if start_date <= f <= end_date
+    filtered_stocks_subdirs = [
+        subdir for subdir in stocks_subdirs if start_date <= subdir <= end_date
     ]
 
-    if not filtered_subdirs:
+    filtered_options_subdirs = [
+        subdir for subdir in options_subdirs if start_date <= subdir <= end_date
+    ]
+
+    if not filtered_stocks_subdirs:
         raise FileNotFoundError(f"No data files found in range {start_date} to {end_date}.")
 
+    if len(filtered_stocks_subdirs) != len(filtered_options_subdirs):
+        print("Stocks or options missing data.")
+        print("Found stocks data for:", filtered_stocks_subdirs)
+        print("Found options data for:", filtered_options_subdirs)
+        exit(1)
+
     files = []
-    for subdir in filtered_subdirs:
-        files.append({ticker: os.path.join(directory, subdir, f"{subdir}-{ticker}.parquet") for ticker in tickers})
+    for subdir in filtered_stocks_subdirs:
+        day_files = {"_date": subdir}
+        for ticker in stocks:
+            day_files[ticker] = {
+                "stocks": os.path.join(stocks_directory, subdir, f"{subdir}-{ticker}.parquet")
+            }
+        for underlying in options:
+            if underlying not in day_files:
+                day_files[underlying] = {}
+            day_files[underlying]["options"] = os.path.join(options_directory, subdir, f"{subdir}-{underlying}.parquet")
 
+        files.append(day_files)
+    
     return files
-

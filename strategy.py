@@ -18,13 +18,16 @@ class Strategy:
         self._tester = tester
 
         self.tickers = []  # List of tickers available
-        self.request_tickers = []
+
+        self.request_stocks = []
+        self.request_options = []
 
         # settings
         self.exit_on_market_close = True
         self.close_positions_order = self.LIFO
         self._data_mode = "ohlc"
-        self._request_tickers = []
+        self._request_stocks = []
+        self._request_options = []
 
     def _set_tickers(self, tickers):
         """
