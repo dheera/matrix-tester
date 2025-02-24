@@ -2,6 +2,7 @@
 
 import pandas as pd
 import numpy as np
+import os
 
 class Strategy:
     """Base Strategy class that extracts available tickers from data."""
@@ -25,15 +26,24 @@ class Strategy:
         # settings
         self.exit_on_market_close = True
         self.close_positions_order = self.LIFO
+
+        # "ohlc" mode, gets minute aggregate data for 1024+ stocks; options not yet supported
+        # can use slippage/commission parameters to simulate slippage
         self._data_mode = "ohlc"
         self._request_stocks = []
         self._request_options = []
 
+        # "bidask" mode, only gets data for selected stocks and option chains for selected underlyings 
+        # and gets gets bid/ask data for more accurate simulation
+        # self._data_mode = "bidask"
+        # self._request_stocks = ["NVDA"]
+        # self._request_options = ["NVDA"]
+
+        # for logging
+        self._log = []
+        os.makedirs("logs", exist_ok = True)
+
     def _set_tickers(self, tickers):
-        """
-        Extracts available tickers by removing suffixes like _open, _close, _high, _low, _volume, _vwap.
-        Stores unique tickers in self.tickers.
-        """
         self.tickers = tickers
         
     def get_cash(self):
@@ -55,5 +65,13 @@ class Strategy:
 
     # Override this
     def on_end_day(self):
-        pass
+        # write logs if the strategy logged anything
+        if len(self._log) > 0:
+            df = pd.DataFrame(self._log)
+            if "timestamp" in df.columns:
+                df.set_index("timestamp", inplace=True)
+            # TODO: do better logging and file naming later
+            df.to_parquet(os.path.join("logs", f"{self.__class__.__name__}_log.parquet"))
 
+    def log(self, datapoint = {}):
+        self._log.append(datapoint)
