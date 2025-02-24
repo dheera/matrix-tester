@@ -9,10 +9,11 @@ from strategy import Strategy
 class RSIStrategy(Strategy):
     """RSI-based trading strategy"""
 
-    def __init__(self, tester, overbought=70, oversold=30):
+    def __init__(self, tester, overbought=70, oversold=30, targets=None):
         super().__init__(tester)
         self.overbought = overbought
         self.oversold = oversold
+        self.targets = targets.split(",") if type(targets) is str else targets
 
         # parameters for tester
         self._data_mode = "ohlc" # this operates in ohlc ("candle") mode and gets aggregates for all tickers
@@ -22,7 +23,10 @@ class RSIStrategy(Strategy):
         actions = []
 
         # check all available tickers for overbought and oversold stocks
-        for ticker in self.tickers:
+        for ticker in (self.targets if self.targets else self.tickers):
+            if (ticker, "close") not in d:
+                continue
+
 
             if len(self.get_positions(ticker)) > 0:
                 # don't buy more if we already did

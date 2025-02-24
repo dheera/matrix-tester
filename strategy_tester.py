@@ -6,7 +6,6 @@ import os, sys
 from tqdm import tqdm
 from strategy import Strategy
 from performance_analyzer import PerformanceAnalyzer
-from aggregate_quoter import AggregateQuoter
 
 class StrategyTester:
     def __init__(self, strategy_class, reset_every_day=True, initial_cash=10000, slippage=0.0, commission=0.0, strategy_args={}):
