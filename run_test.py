@@ -88,11 +88,11 @@ def read_merged(files):
 
     return pd.concat(dfs, axis = 1, join = "inner")
 
-def run_strategy_on_file(data_files, strategy_file, output_dir, slippage, commission):
+def run_strategy_on_file(data_files, strategy_file, output_dir, slippage, commission, strategy_args):
     """Runs a strategy on a single date file and returns results."""
     # Load strategy inside the worker process (Fix: avoid pickling issue)
     strategy_class = load_strategy(strategy_file)
-    tester = StrategyTester(strategy_class, reset_every_day = False, slippage = slippage, commission = commission)
+    tester = StrategyTester(strategy_class, reset_every_day = False, slippage = slippage, commission = commission, strategy_args = strategy_args)
 
     results_collection = []
 
@@ -160,6 +160,26 @@ def run_strategy_on_file(data_files, strategy_file, output_dir, slippage, commis
 
     return results_collection
 
+def convert_value(v):
+    v = v.strip()
+    try:
+        return int(v)
+    except ValueError:
+        try:
+            return float(v)
+        except ValueError:
+            return v
+
+def parse_strategy_args(s):
+    # Split the string on commas, then on '=' for each pair.
+    if not s:
+        return {}
+    return {
+        key.strip(): convert_value(value)
+        for part in s.split(' ')
+        for key, value in [part.split('=')]
+    }
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run a trading strategy on stock data.")
     parser.add_argument("strategy_file", help="Python file containing the Strategy class.")
@@ -174,11 +194,15 @@ if __name__ == "__main__":
     parser.add_argument("--stocks-tq-aggs-dir", type=str, default="/fin/us_stocks_sip/tq_aggs", help="Stocks TQ aggs data dir")
     parser.add_argument("--options-tq-aggs-dir", type=str, default="/fin/us_options_opra/tq_aggs", help="Options TQ aggs data dir")
     parser.add_argument("--num-workers", type=int, default=min(8, os.cpu_count()) , help="How many workers")
+    parser.add_argument("--strategy-args", type=str, default = "", help="Pass args to strategy")
 
     args = parser.parse_args()
 
     # Load an example strategy instance so that we can see what kind of data it requests
-    example_strategy_instance = load_strategy(args.strategy_file)(tester=None)
+
+    strategy_args = parse_strategy_args(args.strategy_args)
+
+    example_strategy_instance = load_strategy(args.strategy_file, **strategy_args)(tester=None)
     data_mode = example_strategy_instance._data_mode
     request_stocks = example_strategy_instance._request_stocks
     request_options = example_strategy_instance._request_options
@@ -234,7 +258,7 @@ if __name__ == "__main__":
 
     if args.mode == "parallel":
         with ProcessPoolExecutor(max_workers=args.num_workers) as executor:
-            futures = {executor.submit(run_strategy_on_file, [file], args.strategy_file, args.output_dir, args.slippage, args.commission): file for file in data_files}
+            futures = {executor.submit(run_strategy_on_file, [file], args.strategy_file, args.output_dir, args.slippage, args.commission, strategy_args): file for file in data_files}
             for future in concurrent.futures.as_completed(futures):
                 try:
                     all_results.append(future.result()[0])
@@ -243,7 +267,7 @@ if __name__ == "__main__":
         print(f"✅ Parallel processing complete")
 
     elif args.mode == "sequential":
-        all_results = run_strategy_on_file(data_files, args.strategy_file, args.output_dir, args.slippage, args.commission)
+        all_results = run_strategy_on_file(data_files, args.strategy_file, args.output_dir, args.slippage, args.commission, strategy_args)
         print(f"✅ Sequential processing complete")
 
     aggregated = aggregate(all_results)
