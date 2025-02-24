@@ -44,7 +44,7 @@ def get_ticker_files_in_range(stocks_directory, options_directory, start_date, e
     if not filtered_stocks_subdirs:
         raise FileNotFoundError(f"No data files found in range {start_date} to {end_date}.")
 
-    if len(filtered_stocks_subdirs) != len(filtered_options_subdirs):
+    if len(options) > 0 and len(filtered_stocks_subdirs) / len(stocks) != len(filtered_options_subdirs) / len(options): # TODO: super crude and bad, fix later
         print("Stocks or options missing data.")
         print("Found stocks data for:", filtered_stocks_subdirs)
         print("Found options data for:", filtered_options_subdirs)
