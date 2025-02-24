@@ -14,6 +14,9 @@ class RSIStrategy(Strategy):
         self.overbought = overbought
         self.oversold = oversold
 
+        # parameters for tester
+        self._data_mode = "ohlc" # this operates in ohlc ("candle") mode and gets aggregates for all tickers
+
     def on_step(self, timestamp, d):
         """Generates trading signals based on RSI column already available in the dataset."""
         actions = []
