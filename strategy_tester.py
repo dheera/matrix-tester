@@ -476,7 +476,7 @@ class StrategyTester:
         action_log = []
         self.data = data
 
-        self.strategy._set_tickers(sorted(self.data.columns.get_level_values(0).unique()))
+        self.strategy._set_tickers(list(self.data.columns.get_level_values(0).unique()))
 
         # This list holds pending orders: { "execute_at": pd.Timestamp, "action": {...} }
         self.scheduled_orders = []
