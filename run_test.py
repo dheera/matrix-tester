@@ -186,8 +186,8 @@ if __name__ == "__main__":
     parser.add_argument("--date", type=str, help="Date to run the strategy on (YYYY-MM-DD).")
     parser.add_argument("--start", type=str, help="Start date for range (YYYY-MM-DD).")
     parser.add_argument("--end", type=str, help="End date for range (YYYY-MM-DD).")
-    parser.add_argument("--slippage", type=float, default=0.0, help="Slippage per trade ($)")
-    parser.add_argument("--commission", type=float, default=0.0, help="Commission per trade (%)")
+    parser.add_argument("--slippage", type=float, default=0.0, help="Slippage per trade")
+    parser.add_argument("--commission", type=float, default=0.0, help="Commission per trade")
     parser.add_argument("--output-dir", type=str, default="output", help="Output directory to put aggregated parquet output")
     parser.add_argument("--mode", type=str, default="parallel", help="parallel|sequential")
     parser.add_argument("--matrix-dir", type=str, default="/fin/us_stocks_sip/minute_aggs_matrix_2048", help="Matrix data dir")
@@ -249,7 +249,7 @@ if __name__ == "__main__":
 
     print("*********************")
 
-    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(os.path.join(args.output_dir, "daily"), exist_ok=True)
     shutil.rmtree(os.path.join(args.output_dir, "daily"))
     os.makedirs(os.path.join(args.output_dir, "daily"), exist_ok=True)
 
@@ -292,8 +292,14 @@ if __name__ == "__main__":
         print("\n🏆 **Top 10 Win Tickers**:")
         print(aggregated["by_ticker"].nlargest(10, "win_rate")[["ticker", "num_trades", "total_profit", "win_rate", "avg_profit"]])
 
+        print("\n🏆 **Worst 10 Win Tickers**:")
+        print(aggregated["by_ticker"].nsmallest(10, "win_rate")[["ticker", "num_trades", "total_profit", "win_rate", "avg_profit"]])
+
         print("\n💰 **Top 10 Profit Tickers**:")
         print(aggregated["by_ticker"].nlargest(10, "total_profit")[["ticker", "num_trades", "total_profit", "win_rate", "avg_profit"]])
+
+        print("\n💰 **Worst 10 Profit Tickers**:")
+        print(aggregated["by_ticker"].nsmallest(10, "total_profit")[["ticker", "num_trades", "total_profit", "win_rate", "avg_profit"]])
 
     if not aggregated["by_hour"].empty:
         print("\n💰 **Results by hour (across all days)**:")
