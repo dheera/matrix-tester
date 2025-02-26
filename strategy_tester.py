@@ -35,6 +35,74 @@ class StrategyTester:
         # each item is { "execute_at": pd.Timestamp, "action": {...} }
         self.scheduled_orders = []
 
+    def _open_positions(self, ticker, price, leftover, side, timestamp, reason):
+        """
+        Opens a new position for leftover shares.
+        
+        :param ticker: Ticker symbol.
+        :param price: Original market price.
+        :param leftover: Number of shares to open.
+        :param side: 'long' or 'short' to indicate the position type.
+        :param timestamp: The timestamp of the trade.
+        :param reason: Reason for the trade.
+        """
+        if leftover <= 0:
+            return
+
+        if side == "long":
+            fill_price = price + self.slippage
+            notional = fill_price * leftover
+            comm_cost = notional * self.commission
+
+            # Create a long position record
+            if ticker not in self.positions:
+                self.positions[ticker] = []
+            self.positions[ticker].append({
+                "entry_price": fill_price,
+                "shares": leftover,
+                "reason": reason,
+            })
+
+            self.cash -= notional + comm_cost
+            self.trades.append({
+                "action": Strategy.BUY,
+                "ticker": ticker,
+                "shares": leftover,
+                "fill_price": fill_price,
+                "commission": comm_cost,
+                "timestamp": timestamp,
+            })
+            print(f"[BUY] {timestamp} | {ticker} | Opened LONG: {leftover} shares at {fill_price:.2f} | Comm: {comm_cost:.2f}")
+
+        elif side == "short":
+            fill_price = price - self.slippage
+            notional = fill_price * leftover
+            comm_cost = notional * self.commission
+
+            if ticker not in self.positions:
+                self.positions[ticker] = []
+            # Negative shares indicate a short position
+            self.positions[ticker].append({
+                "entry_price": fill_price,
+                "shares": -leftover,
+                "reason": reason,
+            })
+
+            self.cash += notional - comm_cost
+            self.trades.append({
+                "action": Strategy.SELL,
+                "ticker": ticker,
+                "shares": -leftover,
+                "fill_price": fill_price,
+                "commission": comm_cost,
+                "timestamp": timestamp,
+            })
+            print(f"[SELL] {timestamp} | {ticker} | Opened SHORT: {leftover} shares at {fill_price:.2f} | Comm: {comm_cost:.2f}")
+
+        else:
+            raise ValueError(f"Invalid side {side} for opening position")
+
+
     def _force_close_position(self, ticker, pos, close_price, timestamp=None, reason=""):
         """
         Force-close a single position (long or short) by calling self._sell(...) or self._buy(...):
@@ -267,7 +335,7 @@ class StrategyTester:
 
     def _buy(self, ticker, price, value=None, shares=None, timestamp=None, reason=""):
         """
-        Executes a buy order by first closing any open short positions (FIFO)
+        Executes a buy order by first closing any open short positions (FIFO/LIFO depending on selection)
         before opening new long positions (if leftover shares remain).
         The strategy can specify either 'value' or 'shares' (but not both).
 
@@ -301,6 +369,7 @@ class StrategyTester:
 
         print(f"[BUY] {timestamp} | {ticker} | Price={price:.2f} => fill={price + self.slippage:.2f}, Shares={shares_to_buy} | {reason}")
 
+        # Close any opposing short positions first:
         leftover = self._close_positions(
             ticker=ticker,
             price=price,
@@ -310,35 +379,13 @@ class StrategyTester:
             reason=reason,
         )
 
-        if leftover > 0:
-            fill_price = price + self.slippage
-            notional = fill_price * leftover
-            comm_cost = notional * self.commission
+        # Open new long positions if there are leftover shares
+        self._open_positions(ticker, price, leftover, side="long", timestamp=timestamp, reason=reason)
 
-            if ticker not in self.positions:
-                self.positions[ticker] = []
-
-            self.positions[ticker].append({
-                "entry_price": fill_price,
-                "shares": leftover,
-                "reason": reason,
-            })
-            # subtract cost + commission
-            self.cash -= notional
-            self.cash -= comm_cost
-
-            self.trades.append({
-                "action": Strategy.BUY,
-                "ticker": ticker,
-                "shares": leftover,
-                "fill_price": fill_price,
-                "commission": comm_cost,
-                "timestamp": timestamp,
-            })
 
     def _sell(self, ticker, price, value=None, shares=None, timestamp=None, reason=""):
         """
-        Executes a sell order by first closing any open long positions (FIFO)
+        Executes a sell order by first closing any open long positions (FIFO/LIFO depending on selection)
         before opening new short positions (if leftover shares remain).
         Slippage & commission:
           For new short orders, fill_price = price - self.slippage
@@ -370,6 +417,7 @@ class StrategyTester:
             
         print(f"[SELL] {timestamp} | {ticker} | Price={price:.2f} => fill={price - self.slippage:.2f}, Shares={shares_to_sell} | {reason}")
 
+        # Close any opposing long positions first:
         leftover = self._close_positions(
             ticker=ticker,
             price=price,
@@ -379,31 +427,9 @@ class StrategyTester:
             reason=reason,
         )
 
-        if leftover > 0:
-            fill_price = price - self.slippage
-            notional = fill_price * leftover
-            comm_cost = notional * self.commission
+        # Open new short positions if there are leftover shares
+        self._open_positions(ticker, price, leftover, side="short", timestamp=timestamp, reason=reason)
 
-            if ticker not in self.positions:
-                self.positions[ticker] = []
-
-            self.positions[ticker].append({
-                "entry_price": fill_price,
-                "shares": -leftover,
-                "reason": reason,
-            })
-
-            self.cash += notional
-            self.cash -= comm_cost
-
-            self.trades.append({
-                "action": Strategy.SELL,
-                "ticker": ticker,
-                "shares": -leftover,
-                "fill_price": fill_price,
-                "commission": comm_cost,
-                "timestamp": timestamp,
-            })
 
     def _exit(self, ticker, row, timestamp=None, reason=""):
         """
