@@ -27,6 +27,7 @@ def load_strategy(strategy_file):
 
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    print(module.__file__)
 
     strategy_classes = [cls for cls in dir(module) if cls.endswith("Strategy") and cls != "Strategy"]
     if not strategy_classes:
